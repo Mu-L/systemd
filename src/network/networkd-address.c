@@ -94,11 +94,7 @@ static int address_new_static(Network *network, const char *filename, unsigned s
         address->network = network;
         address->section = TAKE_PTR(n);
 
-        r = ordered_hashmap_ensure_allocated(&network->addresses_by_section, &network_config_hash_ops);
-        if (r < 0)
-                return r;
-
-        r = ordered_hashmap_put(network->addresses_by_section, address->section, address);
+        r = ordered_hashmap_ensure_put(&network->addresses_by_section, &network_config_hash_ops, address->section, address);
         if (r < 0)
                 return r;
 
@@ -599,7 +595,6 @@ bool link_address_is_dynamic(const Link *link, const Address *address) {
 
 static int link_enumerate_ipv6_tentative_addresses(Link *link) {
         _cleanup_(sd_netlink_message_unrefp) sd_netlink_message *req = NULL, *reply = NULL;
-        sd_netlink_message *addr;
         int r;
 
         assert(link);
@@ -614,7 +609,7 @@ static int link_enumerate_ipv6_tentative_addresses(Link *link) {
         if (r < 0)
                 return r;
 
-        for (addr = reply; addr; addr = sd_netlink_message_next(addr)) {
+        for (sd_netlink_message *addr = reply; addr; addr = sd_netlink_message_next(addr)) {
                 unsigned char flags;
                 int ifindex;
 
@@ -1455,7 +1450,7 @@ int config_parse_broadcast(
         }
 
         n->family = AF_INET;
-        n = NULL;
+        TAKE_PTR(n);
 
         return 0;
 }
@@ -1538,8 +1533,7 @@ int config_parse_address(
         else
                 n->in_addr_peer = buffer;
 
-        n = NULL;
-
+        TAKE_PTR(n);
         return 0;
 }
 
@@ -1584,7 +1578,7 @@ int config_parse_label(
         if (r < 0)
                 return log_oom();
 
-        n = NULL;
+        TAKE_PTR(n);
         return 0;
 }
 
@@ -1680,7 +1674,7 @@ int config_parse_address_flags(
 
         SET_FLAG(n->flags, ltype, r);
 
-        n = NULL;
+        TAKE_PTR(n);
         return 0;
 }
 
@@ -1731,7 +1725,7 @@ int config_parse_address_scope(
         }
 
         n->scope_set = true;
-        n = NULL;
+        TAKE_PTR(n);
         return 0;
 }
 
@@ -1786,7 +1780,7 @@ int config_parse_duplicate_address_detection(
         }
 
         n->duplicate_address_detection = a;
-        n = NULL;
+        TAKE_PTR(n);
         return 0;
 }
 

@@ -586,26 +586,25 @@ char* path_join_internal(const char *first, ...) {
 }
 
 static int check_x_access(const char *path, int *ret_fd) {
-        if (ret_fd) {
-                _cleanup_close_ int fd = -1;
-                int r;
+        _cleanup_close_ int fd = -1;
+        int r;
 
-                /* We need to use O_PATH because there may be executables for which we have only exec
-                 * permissions, but not read (usually suid executables). */
-                fd = open(path, O_PATH|O_CLOEXEC);
-                if (fd < 0)
-                        return -errno;
+        /* We need to use O_PATH because there may be executables for which we have only exec
+         * permissions, but not read (usually suid executables). */
+        fd = open(path, O_PATH|O_CLOEXEC);
+        if (fd < 0)
+                return -errno;
 
-                r = access_fd(fd, X_OK);
-                if (r < 0)
-                        return r;
+        r = fd_verify_regular(fd);
+        if (r < 0)
+                return r;
 
+        r = access_fd(fd, X_OK);
+        if (r < 0)
+                return r;
+
+        if (ret_fd)
                 *ret_fd = TAKE_FD(fd);
-        } else {
-                /* Let's optimize things a bit by not opening the file if we don't need the fd. */
-                if (access(path, X_OK) < 0)
-                        return -errno;
-        }
 
         return 0;
 }
@@ -663,32 +662,20 @@ int find_executable_full(const char *name, bool use_path_envvar, char **ret_file
                         return -ENOMEM;
 
                 r = check_x_access(j, ret_fd ? &fd : NULL);
-                if (r >= 0) {
-                        _cleanup_free_ char *with_dash;
-
-                        with_dash = strjoin(j, "/");
-                        if (!with_dash)
-                                return -ENOMEM;
-
-                        /* If this passes, it must be a directory, and so should be skipped. */
-                        if (access(with_dash, X_OK) >= 0)
-                                continue;
-
-                        /* We can't just `continue` inverting this case, since we need to update last_error. */
-                        if (errno == ENOTDIR) {
-                                /* Found it! */
-                                if (ret_filename)
-                                        *ret_filename = path_simplify(TAKE_PTR(j), false);
-                                if (ret_fd)
-                                        *ret_fd = TAKE_FD(fd);
-
-                                return 0;
-                        }
+                if (r < 0) {
+                        /* PATH entries which we don't have access to are ignored, as per tradition. */
+                        if (r != -EACCES)
+                                last_error = r;
+                        continue;
                 }
 
-                /* PATH entries which we don't have access to are ignored, as per tradition. */
-                if (errno != EACCES)
-                        last_error = -errno;
+                /* Found it! */
+                if (ret_filename)
+                        *ret_filename = path_simplify(TAKE_PTR(j), false);
+                if (ret_fd)
+                        *ret_fd = TAKE_FD(fd);
+
+                return 0;
         }
 
         return last_error;

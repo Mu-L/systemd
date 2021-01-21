@@ -87,7 +87,7 @@ static const char * const route_table_table[] = {
         [RT_TABLE_LOCAL]   = "local",
 };
 
-DEFINE_PRIVATE_STRING_TABLE_LOOKUP(route_table, int);
+DEFINE_STRING_TABLE_LOOKUP(route_table, int);
 
 #define ROUTE_TABLE_STR_MAX CONST_MAX(DECIMAL_STR_MAX(int), STRLEN("default") + 1)
 static const char *format_route_table(int table, char *buf, size_t size) {
@@ -227,11 +227,7 @@ static int route_new_static(Network *network, const char *filename, unsigned sec
         route->network = network;
         route->section = TAKE_PTR(n);
 
-        r = hashmap_ensure_allocated(&network->routes_by_section, &network_config_hash_ops);
-        if (r < 0)
-                return r;
-
-        r = hashmap_put(network->routes_by_section, route->section, route);
+        r = hashmap_ensure_put(&network->routes_by_section, &network_config_hash_ops, route->section, route);
         if (r < 0)
                 return r;
 
@@ -309,6 +305,8 @@ void route_hash_func(const Route *route, struct siphash *state) {
 
                 siphash24_compress(&route->initcwnd, sizeof(route->initcwnd), state);
                 siphash24_compress(&route->initrwnd, sizeof(route->initrwnd), state);
+
+                siphash24_compress(&route->advmss, sizeof(route->advmss), state);
 
                 break;
         default:
@@ -390,6 +388,10 @@ int route_compare_func(const Route *a, const Route *b) {
                         return r;
 
                 r = CMP(a->initrwnd, b->initrwnd);
+                if (r != 0)
+                        return r;
+
+                r = CMP(a->advmss, b->advmss);
                 if (r != 0)
                         return r;
 
@@ -475,6 +477,7 @@ static void route_copy(Route *dest, const Route *src, const MultipathRoute *m) {
         dest->initcwnd = src->initcwnd;
         dest->initrwnd = src->initrwnd;
         dest->lifetime = src->lifetime;
+        dest->advmss= src->advmss;
 
         if (m) {
                 dest->gw_family = m->gateway.family;
@@ -1122,6 +1125,12 @@ int route_configure(
                         return log_link_error_errno(link, r, "Could not append RTAX_FASTOPEN_NO_COOKIE attribute: %m");
         }
 
+        if (route->advmss > 0) {
+                r = sd_netlink_message_append_u32(req, RTAX_ADVMSS, route->advmss);
+                if (r < 0)
+                        return log_link_error_errno(link, r, "Could not append RTAX_ADVMSS attribute: %m");
+        }
+
         r = sd_netlink_message_close_container(req);
         if (r < 0)
                 return log_link_error_errno(link, r, "Could not append RTA_METRICS attribute: %m");
@@ -1481,6 +1490,12 @@ int manager_rtnl_process_route(sd_netlink *rtnl, sd_netlink_message *message, Ma
                 r = sd_netlink_message_read_u32(message, RTAX_INITRWND, &tmp->initrwnd);
                 if (r < 0 && r != -ENODATA) {
                         log_link_warning_errno(link, r, "rtnl: received route message with invalid initrwnd, ignoring: %m");
+                        return 0;
+                }
+
+                r = sd_netlink_message_read_u32(message, RTAX_ADVMSS, &tmp->advmss);
+                if (r < 0 && r != -ENODATA) {
+                        log_link_warning_errno(link, r, "rtnl: received route message with invalid advmss, ignoring: %m");
                         return 0;
                 }
 
@@ -1853,6 +1868,28 @@ int config_parse_route_scope(
         return 0;
 }
 
+int route_table_from_string_full(Manager *m, const char *s, uint32_t *ret) {
+        int r;
+
+        assert(s);
+        assert(m);
+        assert(ret);
+
+        r = route_table_from_string(s);
+        if (r >= 0) {
+                *ret = (uint32_t) r;
+                return 0;
+        }
+
+        uint32_t t = PTR_TO_UINT32(hashmap_get(m->route_tables, s));
+        if (t != 0) {
+                *ret = t;
+                return 0;
+        }
+
+        return safe_atou32(s, ret);
+}
+
 int config_parse_route_table(
                 const char *unit,
                 const char *filename,
@@ -1884,16 +1921,11 @@ int config_parse_route_table(
                 return 0;
         }
 
-        r = route_table_from_string(rvalue);
-        if (r >= 0)
-                n->table = r;
-        else {
-                r = safe_atou32(rvalue, &n->table);
-                if (r < 0) {
-                        log_syntax(unit, LOG_WARNING, filename, line, r,
-                                   "Could not parse route table number \"%s\", ignoring assignment: %m", rvalue);
-                        return 0;
-                }
+        r = route_table_from_string_full(network->manager, rvalue, &n->table);
+        if (r < 0) {
+                log_syntax(unit, LOG_WARNING, filename, line, r,
+                           "Could not parse route table number \"%s\", ignoring assignment: %m", rvalue);
+                return 0;
         }
 
         n->table_set = true;
@@ -2074,6 +2106,63 @@ int config_parse_route_type(
         return 0;
 }
 
+int config_parse_tcp_advmss(
+                const char *unit,
+                const char *filename,
+                unsigned line,
+                const char *section,
+                unsigned section_line,
+                const char *lvalue,
+                int ltype,
+                const char *rvalue,
+                void *data,
+                void *userdata) {
+
+        _cleanup_(route_free_or_set_invalidp) Route *n = NULL;
+        Network *network = userdata;
+        uint64_t u;
+        int r;
+
+        assert(filename);
+        assert(section);
+        assert(lvalue);
+        assert(rvalue);
+        assert(data);
+
+        r = route_new_static(network, filename, section_line, &n);
+        if (r == -ENOMEM)
+                return log_oom();
+        if (r < 0) {
+                log_syntax(unit, LOG_WARNING, filename, line, r,
+                           "Failed to allocate route, ignoring assignment: %m");
+                return 0;
+        }
+
+        if (isempty(rvalue)) {
+                n->advmss = 0;
+                TAKE_PTR(n);
+                return 0;
+        }
+
+        r = parse_size(rvalue, 1024, &u);
+        if (r < 0) {
+                log_syntax(unit, LOG_WARNING, filename, line, r,
+                           "Could not parse TCPAdvertisedMaximumSegmentSize= \"%s\", ignoring assignment: %m", rvalue);
+                return 0;
+        }
+
+        if (u == 0 || u > UINT32_MAX) {
+                log_syntax(unit, LOG_WARNING, filename, line, 0,
+                           "Invalid TCPAdvertisedMaximumSegmentSize= \"%s\", ignoring assignment: %m", rvalue);
+                return 0;
+        }
+
+        n->advmss = u;
+
+        TAKE_PTR(n);
+        return 0;
+}
+
 int config_parse_tcp_window(
                 const char *unit,
                 const char *filename,
@@ -2115,6 +2204,11 @@ int config_parse_tcp_window(
         if (k >= 1024) {
                 log_syntax(unit, LOG_WARNING, filename, line, 0,
                            "Specified TCP %s \"%s\" is too large, ignoring assignment: %m", lvalue, rvalue);
+                return 0;
+        }
+        if (k == 0) {
+                log_syntax(unit, LOG_WARNING, filename, line, 0,
+                           "Invalid TCP %s \"%s\", ignoring assignment: %m", lvalue, rvalue);
                 return 0;
         }
 
@@ -2265,11 +2359,9 @@ int config_parse_multipath_route(
                 }
         }
 
-        r = ordered_set_ensure_allocated(&n->multipath_routes, NULL);
-        if (r < 0)
+        r = ordered_set_ensure_put(&n->multipath_routes, NULL, m);
+        if (r == -ENOMEM)
                 return log_oom();
-
-        r = ordered_set_put(n->multipath_routes, m);
         if (r < 0) {
                 log_syntax(unit, LOG_WARNING, filename, line, r,
                            "Failed to store multipath route, ignoring assignment: %m");
@@ -2278,6 +2370,77 @@ int config_parse_multipath_route(
 
         TAKE_PTR(m);
         TAKE_PTR(n);
+        return 0;
+}
+
+int config_parse_route_table_names(
+                const char *unit,
+                const char *filename,
+                unsigned line,
+                const char *section,
+                unsigned section_line,
+                const char *lvalue,
+                int ltype,
+                const char *rvalue,
+                void *data,
+                void *userdata) {
+
+        _cleanup_free_ char *name = NULL;
+        Hashmap **s = data;
+        uint32_t table;
+        const char *p;
+        int r;
+
+        assert(filename);
+        assert(lvalue);
+        assert(rvalue);
+        assert(data);
+
+        if (isempty(rvalue)) {
+                *s = hashmap_free_free_key(*s);
+                return 0;
+        }
+
+        p = rvalue;
+        r = extract_first_word(&p, &name, ":", 0);
+        if (r == -ENOMEM)
+                return log_oom();
+        if (r <= 0 || isempty(p)) {
+                log_syntax(unit, LOG_WARNING, filename, line, r,
+                           "Invalid RouteTable=, ignoring assignment: %s", rvalue);
+                return 0;
+        }
+
+        if (STR_IN_SET(name, "default", "main","local")) {
+                log_syntax(unit, LOG_WARNING, filename, line, r,
+                           "Route table name %s already preconfigured. Ignoring assignment: %s", name, rvalue);
+                return 0;
+        }
+
+        r = safe_atou32(p, &table);
+        if (r < 0) {
+                log_syntax(unit, LOG_WARNING, filename, line, r,
+                           "Failed to parse RouteTable=, ignoring assignment: %s", p);
+                return 0;
+        }
+
+        if (table == 0) {
+                log_syntax(unit, LOG_WARNING, filename, line, 0,
+                           "Invalid RouteTable=, ignoring assignment: %s", p);
+                return 0;
+        }
+
+        r = hashmap_ensure_put(s, &string_hash_ops, name, UINT32_TO_PTR(table));
+        if (r == -ENOMEM)
+                return log_oom();
+        if (r == -EEXIST) {
+                log_syntax(unit, LOG_WARNING, filename, line, r,
+                           "Specified RouteTable= name and value pair conflicts with others, ignoring assignment: %s", rvalue);
+                return 0;
+        }
+        if (r > 0)
+                TAKE_PTR(name);
+
         return 0;
 }
 

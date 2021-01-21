@@ -1051,8 +1051,11 @@ IPv6Token=prefixstable:2002:da8:1::</programlisting></para>
         <varlistentry>
           <term><varname>Scope=</varname></term>
           <listitem>
-            <para>The scope of the address, which can be <literal>global</literal>,
-            <literal>link</literal> or <literal>host</literal> or an unsigned integer in the range 0—255.
+            <para>The scope of the address, which can be
+            <literal>global</literal> (valid everywhere on the network, even through a gateway),
+            <literal>link</literal> (only valid on this device, will not traverse a gateway) or
+            <literal>host</literal> (only valid within the device itself, e.g. 127.0.0.1)
+            or an unsigned integer in the range 0—255.
             Defaults to <literal>global</literal>.</para>
           </listitem>
         </varlistentry>
@@ -1081,11 +1084,11 @@ IPv6Token=prefixstable:2002:da8:1::</programlisting></para>
           <listitem>
             <para>Takes a boolean. If true the kernel manage temporary addresses created
             from this one as template on behalf of Privacy Extensions
-            <ulink url="https://tools.ietf.org/html/rfc3041">RFC 3041</ulink>.  For this to become
+            <ulink url="https://tools.ietf.org/html/rfc3041">RFC 3041</ulink>. For this to become
             active, the use_tempaddr sysctl setting has to be set to a value greater than zero.
             The given address needs to have a prefix length of 64. This flag allows using privacy
             extensions in a manually configured network, just like if stateless auto-configuration
-            was active. Defaults to false. </para>
+            was active. Defaults to false.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
@@ -1197,8 +1200,9 @@ IPv6Token=prefixstable:2002:da8:1::</programlisting></para>
         <varlistentry>
           <term><varname>Table=</varname></term>
           <listitem>
-            <para>Specifies the routing table identifier to lookup if the rule selector matches. Takes
-            one of <literal>default</literal>, <literal>main</literal>, and <literal>local</literal>,
+            <para>Specifies the routing table identifier to lookup if the rule selector matches. Takes one of predefined names
+            <literal>default</literal>, <literal>main</literal>, and <literal>local</literal>, and names defined in <varname>RouteTable=</varname>
+            in <citerefentry><refentrytitle>networkd.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>,
             or a number between 1 and 4294967295. Defaults to <literal>main</literal>.</para>
           </listitem>
         </varlistentry>
@@ -1367,12 +1371,32 @@ IPv6Token=prefixstable:2002:da8:1::</programlisting></para>
         <varlistentry>
           <term><varname>Scope=</varname></term>
           <listitem>
-            <para>The scope of the route, which can be <literal>global</literal>, <literal>site</literal>,
-            <literal>link</literal>, <literal>host</literal>, or <literal>nowhere</literal>. For IPv4 route,
-            defaults to <literal>host</literal> if <varname>Type=</varname> is <literal>local</literal>
-            or <literal>nat</literal>, and <literal>link</literal> if <varname>Type=</varname> is
+            <para>The scope of the IPv4 route, which can be <literal>global</literal>, <literal>site</literal>,
+            <literal>link</literal>, <literal>host</literal>, or
+            <literal>nowhere</literal>:</para>
+            <itemizedlist>
+              <listitem><para><literal>global</literal> means the route can reach
+              hosts more than one hop away.</para></listitem>
+
+              <listitem><para><literal>site</literal> means an interior route in
+              the local autonomous system.</para></listitem>
+
+              <listitem><para><literal>link</literal> means the route can only
+              reach hosts on the local network (one hop away).</para></listitem>
+
+              <listitem><para><literal>host</literal> means the route will not
+              leave the local machine (used for internal addresses like
+              127.0.0.1).</para></listitem>
+
+              <listitem><para><literal>nowhere</literal> means the destination
+              doesn't exist.</para></listitem>
+            </itemizedlist>
+            <para>For IPv4 route, defaults to <literal>host</literal> if <varname>Type=</varname> is
+            <literal>local</literal> or <literal>nat</literal>,
+            and <literal>link</literal> if <varname>Type=</varname> is
             <literal>broadcast</literal>, <literal>multicast</literal>, or <literal>anycast</literal>.
-            In other cases, defaults to <literal>global</literal>.</para>
+            In other cases, defaults to <literal>global</literal>.  The value is
+            not used for IPv6.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
@@ -1386,11 +1410,11 @@ IPv6Token=prefixstable:2002:da8:1::</programlisting></para>
         <varlistentry>
           <term><varname>Table=</varname></term>
           <listitem>
-            <para>The table identifier for the route. Takes <literal>default</literal>,
-            <literal>main</literal>, <literal>local</literal> or a number between 1 and 4294967295.
-            The table can be retrieved using <command>ip route show table <replaceable>num</replaceable></command>.
-            If unset and <varname>Type=</varname> is <literal>local</literal>, <literal>broadcast</literal>,
-            <literal>anycast</literal>, or <literal>nat</literal>, then <literal>local</literal> is used.
+            <para>The table identifier for the route. Takes one of predefined names <literal>default</literal>, <literal>main</literal>,
+            and <literal>local</literal>, and names defined in <varname>RouteTable=</varname> in <citerefentry><refentrytitle>networkd.conf</refentrytitle>
+            <manvolnum>5</manvolnum></citerefentry>, or a number between 1 and 4294967295. The table can be retrieved using
+            <command>ip route show table <replaceable>num</replaceable></command>. If unset and <varname>Type=</varname> is <literal>local</literal>,
+            <literal>broadcast</literal>, <literal>anycast</literal>, or <literal>nat</literal>, then <literal>local</literal> is used.
             In other cases, defaults to <literal>main</literal>.
           </para>
           </listitem>
@@ -1480,6 +1504,14 @@ IPv6Token=prefixstable:2002:da8:1::</programlisting></para>
           <listitem>
             <para>Takes string; <literal>CS6</literal> or <literal>CS4</literal>. Used to set IP
             service type to CS6 (network control) or CS4 (Realtime). Defaults to CS6.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><varname>TCPAdvertisedMaximumSegmentSize=</varname></term>
+          <listitem>
+            <para>Specifies the Path MSS (in bytes) hints given on TCP layer. The usual suffixes K, M, G, are
+            supported and are understood to the base of 1024. An unsigned integer in the range 1–4294967294.
+            When unset, the kernel's default will be used.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
@@ -1859,6 +1891,14 @@ IPv6Token=prefixstable:2002:da8:1::</programlisting></para>
 
       <variablelist class='network-directives'>
         <varlistentry>
+          <term><varname>UseAddress=</varname></term>
+          <listitem>
+            <para>When true (the default), the IP addresses provided by the DHCPv6 server will be
+            assigned.</para>
+          </listitem>
+        </varlistentry>
+
+        <varlistentry>
           <term><varname>UseDNS=</varname></term>
           <term><varname>UseNTP=</varname></term>
           <listitem>
@@ -2038,6 +2078,13 @@ IPv6Token=prefixstable:2002:da8:1::</programlisting></para>
           DHCPv6 Prefix Delegation to form a complete address. When <varname>Assign=</varname> is
           disabled, this setting is ignored. When unset, the EUI-64 algorithm will be used to form
           addresses. Defaults to unset.</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><varname>ManageTemporaryAddress=</varname></term>
+        <listitem>
+          <para>As in the [Address] section, but defaults to true.</para>
         </listitem>
       </varlistentry>
     </variablelist>
@@ -2740,6 +2787,16 @@ IPv6Token=prefixstable:2002:da8:1::</programlisting></para>
           <listitem>
             <para>Takes a boolean. When <literal>yes</literal>, three samples (instead of one) are used to determine
             the value of a received bit by majority rule. When unset, the kernel's default will be used.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term><varname>BusErrorReporting=</varname></term>
+          <listitem>
+            <para>Takes a boolean. When <literal>yes</literal>, reporting of CAN bus errors is activated
+            (those include single bit, frame format, and bit stuffing errors, unable to send dominant bit,
+            unable to send recessive bit, bus overload, active error announcement, error occurred on
+            transmission). When unset, the kernel's default will be used. Note: in case of a CAN bus with a
+            single CAN device, sending a CAN frame may result in a huge number of CAN bus errors.</para>
           </listitem>
         </varlistentry>
         <varlistentry>

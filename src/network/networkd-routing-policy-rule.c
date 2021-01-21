@@ -8,6 +8,7 @@
 #include "conf-parser.h"
 #include "fileio.h"
 #include "format-util.h"
+#include "hashmap.h"
 #include "ip-protocol-list.h"
 #include "netlink-util.h"
 #include "networkd-manager.h"
@@ -100,11 +101,7 @@ static int routing_policy_rule_new_static(Network *network, const char *filename
         rule->section = TAKE_PTR(n);
         rule->protocol = RTPROT_STATIC;
 
-        r = hashmap_ensure_allocated(&network->rules_by_section, &network_config_hash_ops);
-        if (r < 0)
-                return r;
-
-        r = hashmap_put(network->rules_by_section, rule->section, rule);
+        r = hashmap_ensure_put(&network->rules_by_section, &network_config_hash_ops, rule->section, rule);
         if (r < 0)
                 return r;
 
@@ -1067,8 +1064,7 @@ int config_parse_routing_policy_rule_tos(
                 return 0;
         }
 
-        n = NULL;
-
+        TAKE_PTR(n);
         return 0;
 }
 
@@ -1104,8 +1100,7 @@ int config_parse_routing_policy_rule_priority(
                 return 0;
         }
 
-        n = NULL;
-
+        TAKE_PTR(n);
         return 0;
 }
 
@@ -1135,14 +1130,14 @@ int config_parse_routing_policy_rule_table(
         if (r < 0)
                 return log_oom();
 
-        r = safe_atou32(rvalue, &n->table);
+        r = route_table_from_string_full(network->manager, rvalue, &n->table);
         if (r < 0) {
-                log_syntax(unit, LOG_WARNING, filename, line, r, "Failed to parse RPDB rule table, ignoring: %s", rvalue);
+                log_syntax(unit, LOG_WARNING, filename, line, r,
+                           "Could not parse RPDB rule route table number \"%s\", ignoring assignment: %m", rvalue);
                 return 0;
         }
 
-        n = NULL;
-
+        TAKE_PTR(n);
         return 0;
 }
 
@@ -1178,8 +1173,7 @@ int config_parse_routing_policy_rule_fwmark_mask(
                 return 0;
         }
 
-        n = NULL;
-
+        TAKE_PTR(n);
         return 0;
 }
 
@@ -1228,8 +1222,7 @@ int config_parse_routing_policy_rule_prefix(
                 return 0;
         }
 
-        n = NULL;
-
+        TAKE_PTR(n);
         return 0;
 }
 
@@ -1274,8 +1267,7 @@ int config_parse_routing_policy_rule_device(
                         return log_oom();
         }
 
-        n = NULL;
-
+        TAKE_PTR(n);
         return 0;
 }
 
@@ -1319,8 +1311,7 @@ int config_parse_routing_policy_rule_port_range(
                 n->dport.end = high;
         }
 
-        n = NULL;
-
+        TAKE_PTR(n);
         return 0;
 }
 
@@ -1358,8 +1349,7 @@ int config_parse_routing_policy_rule_ip_protocol(
 
         n->ipproto = r;
 
-        n = NULL;
-
+        TAKE_PTR(n);
         return 0;
 }
 
@@ -1397,8 +1387,7 @@ int config_parse_routing_policy_rule_invert(
 
         n->invert_rule = r;
 
-        n = NULL;
-
+        TAKE_PTR(n);
         return 0;
 }
 
@@ -1437,8 +1426,8 @@ int config_parse_routing_policy_rule_family(
         }
 
         n->address_family = a;
-        n = NULL;
 
+        TAKE_PTR(n);
         return 0;
 }
 
@@ -1483,8 +1472,8 @@ int config_parse_routing_policy_rule_uid_range(
 
         n->uid_range.start = start;
         n->uid_range.end = end;
-        n = NULL;
 
+        TAKE_PTR(n);
         return 0;
 }
 
@@ -1524,8 +1513,7 @@ int config_parse_routing_policy_rule_suppress_prefixlen(
                 return 0;
         }
 
-        n = NULL;
-
+        TAKE_PTR(n);
         return 0;
 }
 
@@ -1563,8 +1551,8 @@ int config_parse_routing_policy_rule_type(
         }
 
         n->type = (uint8_t) t;
-        n = NULL;
 
+        TAKE_PTR(n);
         return 0;
 }
 

@@ -9,8 +9,10 @@ set -e
 # so the files keep those permissions, otherwise details of what umask
 # was set at the time the git tree was cloned will leak all the way
 # through. Also set umask explicitly during the build.
-chmod -R u+w,go-w,a+rX .
-umask 022
+if ! mountpoint -q "$SRCDIR"; then
+        chmod -R u+w,go-w,a+rX .
+        umask 022
+fi
 
 # If mkosi.builddir/ exists mkosi will set $BUILDDIR to it, let's then use it
 # as out-of-tree build dir. Otherwise, let's make up our own builddir.
@@ -84,17 +86,26 @@ if [ ! -f "$BUILDDIR"/build.ninja ] ; then
                 fi
         fi
 
-        meson "$BUILDDIR" -D "sysvinit-path=$sysvinit_path" -D "rootprefix=$rootprefix" -D man=false -D "nobody-user=$nobody_user" -D "nobody-group=$nobody_group"
+        meson "$BUILDDIR" \
+                -D "sysvinit-path=$sysvinit_path" \
+                -D "rootprefix=$rootprefix" \
+                -D man=false \
+                -D "nobody-user=$nobody_user" \
+                -D "nobody-group=$nobody_group" \
+                -D translations=false \
+                -D version-tag="${VERSION_TAG}"
 fi
 
-ninja -C "$BUILDDIR" all
+cd "$BUILDDIR"
+ninja
 if [ "$WITH_TESTS" = 1 ] ; then
         for id in 1 2 3; do
-                groupadd -g $id testgroup$id || :
+                getent group $id > /dev/null || groupadd -g $id testgroup$id
         done
 
-        ninja -C "$BUILDDIR" test
+        ninja test
 fi
+cd "$SRCDIR"
 
 # Ubuntu Focal is stuck with meson 0.53.0.
 if [ "$(meson -v | cut -d . -f 2)" -gt 53 ] ; then

@@ -142,11 +142,9 @@ static int network_resolve_stacked_netdevs(Network *network) {
                 if (r <= 0)
                         continue;
 
-                r = hashmap_ensure_allocated(&network->stacked_netdevs, &string_hash_ops);
-                if (r < 0)
+                r = hashmap_ensure_put(&network->stacked_netdevs, &string_hash_ops, netdev->ifname, netdev);
+                if (r == -ENOMEM)
                         return log_oom();
-
-                r = hashmap_put(network->stacked_netdevs, netdev->ifname, netdev);
                 if (r < 0)
                         return log_error_errno(r, "%s: Failed to add NetDev '%s' to network: %m",
                                                network->filename, (const char *) name);
@@ -352,14 +350,16 @@ int network_load_one(Manager *manager, OrderedHashmap **networks, const char *fi
                 .dhcp_use_timezone = false,
                 .dhcp_ip_service_type = -1,
 
+                .dhcp6_use_address = true,
+                .dhcp6_use_dns = true,
+                .dhcp6_use_ntp = true,
                 .dhcp6_rapid_commit = true,
                 .dhcp6_route_metric = DHCP_ROUTE_METRIC,
-                .dhcp6_use_ntp = true,
-                .dhcp6_use_dns = true,
 
                 .dhcp6_pd = -1,
                 .dhcp6_pd_announce = true,
                 .dhcp6_pd_assign = true,
+                .dhcp6_pd_manage_temporary_address = true,
                 .dhcp6_pd_subnet_id = -1,
 
                 .dhcp_server_emit[SD_DHCP_LEASE_DNS].emit = true,
@@ -415,6 +415,7 @@ int network_load_one(Manager *manager, OrderedHashmap **networks, const char *fi
                 .ipv6_accept_ra_start_dhcp6_client = IPV6_ACCEPT_RA_START_DHCP6_CLIENT_YES,
 
                 .can_triple_sampling = -1,
+                .can_berr_reporting = -1,
                 .can_termination = -1,
                 .can_listen_only = -1,
                 .can_fd_mode = -1,
@@ -498,15 +499,11 @@ int network_load_one(Manager *manager, OrderedHashmap **networks, const char *fi
                 /* Ignore .network files that do not match the conditions. */
                 return 0;
 
-        r = ordered_hashmap_ensure_allocated(networks, &string_hash_ops);
+        r = ordered_hashmap_ensure_put(networks, &string_hash_ops, network->name, network);
         if (r < 0)
                 return r;
 
-        r = ordered_hashmap_put(*networks, network->name, network);
-        if (r < 0)
-                return r;
-
-        network = NULL;
+        TAKE_PTR(network);
         return 0;
 }
 
@@ -808,11 +805,9 @@ int config_parse_stacked_netdev(const char *unit,
         if (!name)
                 return log_oom();
 
-        r = hashmap_ensure_allocated(h, &string_hash_ops);
-        if (r < 0)
+        r = hashmap_ensure_put(h, &string_hash_ops, name, INT_TO_PTR(kind));
+        if (r == -ENOMEM)
                 return log_oom();
-
-        r = hashmap_put(*h, name, INT_TO_PTR(kind));
         if (r < 0)
                 log_syntax(unit, LOG_WARNING, filename, line, r,
                            "Cannot add NetDev '%s' to network, ignoring assignment: %m", name);
@@ -820,7 +815,7 @@ int config_parse_stacked_netdev(const char *unit,
                 log_syntax(unit, LOG_DEBUG, filename, line, r,
                            "NetDev '%s' specified twice, ignoring.", name);
         else
-                name = NULL;
+                TAKE_PTR(name);
 
         return 0;
 }
@@ -1221,7 +1216,7 @@ int config_parse_rx_tx_queues(
                 log_syntax(unit, LOG_WARNING, filename, line, r, "Failed to parse %s=, ignoring assignment: %s.", lvalue, rvalue);
                 return 0;
         }
-        if (k > 4096) {
+        if (k == 0 || k > 4096) {
                 log_syntax(unit, LOG_WARNING, filename, line, 0, "Invalid %s=, ignoring assignment: %s.", lvalue, rvalue);
                 return 0;
         }

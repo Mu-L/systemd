@@ -40,6 +40,7 @@ typedef struct Route {
         uint32_t mtu;
         uint32_t initcwnd;
         uint32_t initrwnd;
+        uint32_t advmss;
         unsigned char pref;
         unsigned flags;
         int gateway_onlink;
@@ -85,6 +86,11 @@ int network_add_ipv4ll_route(Network *network);
 int network_add_default_route_on_device(Network *network);
 void network_drop_invalid_routes(Network *network);
 
+int route_table_from_string_full(Manager *m, const char *table, uint32_t *ret);
+
+const char *route_table_to_string(int d) _const_;
+int route_table_from_string(const char *d) _pure_;
+
 CONFIG_PARSER_PROTOTYPE(config_parse_gateway);
 CONFIG_PARSER_PROTOTYPE(config_parse_preferred_src);
 CONFIG_PARSER_PROTOTYPE(config_parse_destination);
@@ -98,3 +104,5 @@ CONFIG_PARSER_PROTOTYPE(config_parse_route_type);
 CONFIG_PARSER_PROTOTYPE(config_parse_tcp_window);
 CONFIG_PARSER_PROTOTYPE(config_parse_route_mtu);
 CONFIG_PARSER_PROTOTYPE(config_parse_multipath_route);
+CONFIG_PARSER_PROTOTYPE(config_parse_tcp_advmss);
+CONFIG_PARSER_PROTOTYPE(config_parse_route_table_names);

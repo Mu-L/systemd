@@ -336,11 +336,7 @@ static int rule_resolve_user(UdevRules *rules, const char *name, uid_t *ret) {
         if (!n)
                 return -ENOMEM;
 
-        r = hashmap_ensure_allocated(&rules->known_users, &string_hash_ops);
-        if (r < 0)
-                return r;
-
-        r = hashmap_put(rules->known_users, n, UID_TO_PTR(uid));
+        r = hashmap_ensure_put(&rules->known_users, &string_hash_ops, n, UID_TO_PTR(uid));
         if (r < 0)
                 return r;
 
@@ -375,11 +371,7 @@ static int rule_resolve_group(UdevRules *rules, const char *name, gid_t *ret) {
         if (!n)
                 return -ENOMEM;
 
-        r = hashmap_ensure_allocated(&rules->known_groups, &string_hash_ops);
-        if (r < 0)
-                return r;
-
-        r = hashmap_put(rules->known_groups, n, GID_TO_PTR(gid));
+        r = hashmap_ensure_put(&rules->known_groups, &string_hash_ops, n, GID_TO_PTR(gid));
         if (r < 0)
                 return r;
 
@@ -1241,7 +1233,7 @@ int udev_rules_parse_file(UdevRules *rules, const char *filename) {
                         if (strlen(continuation) + len >= UDEV_LINE_SIZE)
                                 ignore_line = true;
 
-                        if (!strextend(&continuation, line, NULL))
+                        if (!strextend(&continuation, line))
                                 return log_oom();
 
                         if (!ignore_line) {
@@ -1985,15 +1977,16 @@ static int udev_rule_apply_token_to_event(
                 if (token->op == OP_ASSIGN)
                         ordered_hashmap_clear_free_free(event->seclabel_list);
 
-                r = ordered_hashmap_ensure_allocated(&event->seclabel_list, NULL);
-                if (r < 0)
+                r = ordered_hashmap_ensure_put(&event->seclabel_list, NULL, name, label);
+                if (r == -ENOMEM)
                         return log_oom();
+                if (r < 0)
+                        return log_rule_error_errno(dev, rules, r, "Failed to store SECLABEL{%s}='%s': %m", name, label);;
 
-                r = ordered_hashmap_put(event->seclabel_list, name, label);
-                if (r < 0)
-                        return log_oom();
                 log_rule_debug(dev, rules, "SECLABEL{%s}='%s'", name, label);
-                name = label = NULL;
+
+                TAKE_PTR(name);
+                TAKE_PTR(label);
                 break;
         }
         case TK_A_ENV: {
@@ -2154,19 +2147,17 @@ static int udev_rule_apply_token_to_event(
                 if (IN_SET(token->op, OP_ASSIGN, OP_ASSIGN_FINAL))
                         ordered_hashmap_clear_free_key(event->run_list);
 
-                r = ordered_hashmap_ensure_allocated(&event->run_list, NULL);
-                if (r < 0)
-                        return log_oom();
-
                 (void) udev_event_apply_format(event, token->value, buf, sizeof(buf), false);
 
                 cmd = strdup(buf);
                 if (!cmd)
                         return log_oom();
 
-                r = ordered_hashmap_put(event->run_list, cmd, token->data);
-                if (r < 0)
+                r = ordered_hashmap_ensure_put(&event->run_list, NULL, cmd, token->data);
+                if (r == -ENOMEM)
                         return log_oom();
+                if (r < 0)
+                        return log_rule_error_errno(dev, rules, r, "Failed to store command '%s': %m", cmd);
 
                 TAKE_PTR(cmd);
 

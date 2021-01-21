@@ -251,16 +251,11 @@ sensor:modalias:acpi:KIOX000A*:dmi:*:svncube:pni1-TF:*
 sensor:modalias:acpi:SMO8500*:dmi:*:svncube:pni7:*
  ACCEL_MOUNT_MATRIX=1, 0, 0; 0, -1, 0; 0, 0, 1
 
-# Cube i7 Stylus
+# Cube i7 Stylus, i7 Stylus I8L Model, i7 Book (i16) and Mix Plus (i18B)
 sensor:modalias:acpi:KIOX000A*:dmi:*:svnCube:pni7Stylus:*
- ACCEL_MOUNT_MATRIX=-1, 0, 0; 0, 1, 0; 0, 0, 1
-
-# Cube i7 Book (i16)
-sensor:modalias:acpi:KIOX000A*:dmi:*:svnCube:pni16:*
- ACCEL_MOUNT_MATRIX=-1, 0, 0; 0, 1, 0; 0, 0, 1
-
-# Cube i7 Stylus I8L Model
 sensor:modalias:acpi:KIOX000A*:dmi:*:svnCube:pni8-L:*
+sensor:modalias:acpi:KIOX000A*:dmi:*:svnCube:pni16:*
+sensor:modalias:acpi:KIOX000A*:dmi:*:svnCube:pni18B:*
  ACCEL_MOUNT_MATRIX=-1, 0, 0; 0, 1, 0; 0, 0, 1
 
 # Cube iWork 10 Flagship
@@ -306,6 +301,14 @@ sensor:modalias:acpi:INVN6500*:dmi:*svnDell*:pnVenue10Pro5055:*
 #########################################
 sensor:modalias:acpi:SMO8500*:dmi:*svn*DEXP*:*pn*DEXPOEM:*
  ACCEL_MOUNT_MATRIX=0, -1, 0; -1, 0, 0; 0, 0, 1
+
+#########################################
+# Digibras
+#########################################
+
+# Digibras F10-30
+sensor:modalias:acpi:SMO8500*:dmi:*:svnDigibras:pnF10-30:*
+ ACCEL_MOUNT_MATRIX=-1, 0, 0; 0, 1, 0; 0, 0, 1
 
 #########################################
 # DIGMA
@@ -517,13 +520,18 @@ sensor:modalias:acpi:*BOSC0200*:dmi:*:svnLENOVO*:pn80U1:*
 sensor:modalias:acpi:BOSC0200*:dmi:*:svnLINX*:pnLINX1010B:*
  ACCEL_MOUNT_MATRIX=-1, 0, 0; 0, 1, 0; 0, 0, -1
 
-# Linx 12X64 and 12V64
+# Linx 12X64, 12V64 and Vision 8
 sensor:modalias:acpi:KIOX000A*:dmi:*:svnLINX*:pnLINX12*64:*
+sensor:modalias:acpi:KIOX000A*:dmi:*:svnLINX:pnVISION004:*
  ACCEL_MOUNT_MATRIX=0, 1, 0; 1, 0, 0; 0, 0, 1
 
 #########################################
 # Medion
 #########################################
+# Medion Akoya E2228T MD61900
+sensor:modalias:acpi:KIOX020A*:dmi:*:svnMEDION:pnE2228TMD61900:*
+ ACCEL_MOUNT_MATRIX=-1, 0, 0; 0, -1, 0; 0, 0, -1
+ ACCEL_LOCATION=base
 
 # Medion Akoya E1239T MD60568
 sensor:modalias:acpi:KIOX0009*:dmi:*:svnMEDION:pnE1239TMD60568:*

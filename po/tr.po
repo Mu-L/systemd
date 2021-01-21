@@ -8,8 +8,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: systemd master\n"
-"Report-Msgid-Bugs-To: https://github.com/systemd/systemd/issues\n"
-"POT-Creation-Date: 2020-09-27 03:31+0000\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2021-01-08 17:48+0100\n"
 "PO-Revision-Date: 2020-11-28 13:35+0000\n"
 "Last-Translator: Oğuz Ersen <oguzersen@protonmail.com>\n"
 "Language-Team: Turkish <https://translate.fedoraproject.org/projects/systemd/"
@@ -75,7 +75,6 @@ msgid "Create a home area"
 msgstr "Ev alanı oluştur"
 
 #: src/home/org.freedesktop.home1.policy:14
-#| msgid "Authentication is required to reload the systemd state."
 msgid "Authentication is required to create a user's home area."
 msgstr "Bir kullanıcının ev alanını oluşturmak kimlik doğrulaması gerektirir."
 
@@ -84,7 +83,6 @@ msgid "Remove a home area"
 msgstr "Ev alanını kaldır"
 
 #: src/home/org.freedesktop.home1.policy:24
-#| msgid "Authentication is required to reload the systemd state."
 msgid "Authentication is required to remove a user's home area."
 msgstr "Bir kullanıcının ev alanını kaldırmak kimlik doğrulaması gerektirir."
 
@@ -93,8 +91,6 @@ msgid "Check credentials of a home area"
 msgstr "Bir ev alanının kimlik bilgilerini denetle"
 
 #: src/home/org.freedesktop.home1.policy:34
-#| msgid ""
-#| "Authentication is required to attach or detach a portable service image."
 msgid ""
 "Authentication is required to check credentials against a user's home area."
 msgstr ""
@@ -106,7 +102,6 @@ msgid "Update a home area"
 msgstr "Ev alanını güncelle"
 
 #: src/home/org.freedesktop.home1.policy:44
-#| msgid "Authentication is required to attach a device to a seat."
 msgid "Authentication is required to update a user's home area."
 msgstr "Bir kullanıcının ev alanını güncellemek kimlik doğrulaması gerektirir."
 
@@ -115,7 +110,6 @@ msgid "Resize a home area"
 msgstr "Ev alanını yeniden boyutlandır"
 
 #: src/home/org.freedesktop.home1.policy:54
-#| msgid "Authentication is required to set a wall message"
 msgid "Authentication is required to resize a user's home area."
 msgstr ""
 "Bir kullanıcının ev alanını yeniden boyutlandırmak kimlik doğrulaması "
@@ -126,8 +120,6 @@ msgid "Change password of a home area"
 msgstr "Ev alanının parolasını değiştir"
 
 #: src/home/org.freedesktop.home1.policy:64
-#| msgid ""
-#| "Authentication is required to manage active sessions, users and seats."
 msgid ""
 "Authentication is required to change the password of a user's home area."
 msgstr ""
@@ -614,7 +606,6 @@ msgid "Change Session"
 msgstr "Oturumu Değiştir"
 
 #: src/login/org.freedesktop.login1.policy:407
-#| msgid "Authentication is required to halt the system."
 msgid "Authentication is required to change the virtual terminal."
 msgstr "Sanal uçbirimi değiştirmek kimlik doğrulaması gerektirir."
 
@@ -706,7 +697,6 @@ msgstr "NTP sunucularını ayarlamak için kimlik doğrulaması gereklidir."
 
 #: src/network/org.freedesktop.network1.policy:33
 #: src/resolve/org.freedesktop.resolve1.policy:44
-#| msgid "Register a DNS-SD service"
 msgid "Set DNS servers"
 msgstr "DNS sunucularını ayarla"
 

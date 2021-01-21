@@ -79,11 +79,7 @@ static int nexthop_new_static(Network *network, const char *filename, unsigned s
         nexthop->network = network;
         nexthop->section = TAKE_PTR(n);
 
-        r = hashmap_ensure_allocated(&network->nexthops_by_section, &network_config_hash_ops);
-        if (r < 0)
-                return r;
-
-        r = hashmap_put(network->nexthops_by_section, nexthop->section, nexthop);
+        r = hashmap_ensure_put(&network->nexthops_by_section, &network_config_hash_ops, nexthop->section, nexthop);
         if (r < 0)
                 return r;
 
@@ -183,8 +179,7 @@ static int nexthop_add_internal(Link *link, Set **nexthops, NextHop *in, NextHop
         if (ret)
                 *ret = nexthop;
 
-        nexthop = NULL;
-
+        TAKE_PTR(nexthop);
         return 0;
 }
 

@@ -574,6 +574,11 @@ static void test_exec_dynamicuser(Manager *m) {
                 return;
         }
 
+        if (strstr_ptr(ci_environment(), "github-actions")) {
+                log_notice("%s: skipping test on GH Actions because of systemd/systemd#10337", __func__);
+                return;
+        }
+
         test(m, "exec-dynamicuser-fixeduser.service", can_unshare ? 0 : EXIT_NAMESPACE, CLD_EXITED);
         if (check_user_has_group_with_same_name("adm"))
                 test(m, "exec-dynamicuser-fixeduser-adm.service", can_unshare ? 0 : EXIT_NAMESPACE, CLD_EXITED);
@@ -806,6 +811,10 @@ static void test_exec_standardoutput_append(Manager *m) {
         test(m, "exec-standardoutput-append.service", 0, CLD_EXITED);
 }
 
+static void test_exec_standardoutput_truncate(Manager *m) {
+        test(m, "exec-standardoutput-truncate.service", 0, CLD_EXITED);
+}
+
 static void test_exec_condition(Manager *m) {
         test_service(m, "exec-condition-failed.service", SERVICE_FAILURE_EXIT_CODE);
         test_service(m, "exec-condition-skip.service", SERVICE_SKIP_CONDITION);
@@ -871,6 +880,7 @@ int main(int argc, char *argv[]) {
                 entry(test_exec_standardinput),
                 entry(test_exec_standardoutput),
                 entry(test_exec_standardoutput_append),
+                entry(test_exec_standardoutput_truncate),
                 entry(test_exec_supplementarygroups),
                 entry(test_exec_systemcallerrornumber),
                 entry(test_exec_systemcallfilter),
@@ -892,8 +902,8 @@ int main(int argc, char *argv[]) {
         test_setup_logging(LOG_DEBUG);
 
 #if HAS_FEATURE_ADDRESS_SANITIZER
-        if (strstr_ptr(ci_environment(), "travis")) {
-                log_notice("Running on TravisCI under ASan, skipping, see https://github.com/systemd/systemd/issues/10696");
+        if (strstr_ptr(ci_environment(), "travis") || strstr_ptr(ci_environment(), "github-actions")) {
+                log_notice("Running on Travis CI/GH Actions under ASan, skipping, see https://github.com/systemd/systemd/issues/10696");
                 return EXIT_TEST_SKIP;
         }
 #endif

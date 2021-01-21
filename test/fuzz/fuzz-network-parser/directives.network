@@ -125,6 +125,7 @@ MUDURL=
 RouteMTUBytes=
 FallbackLeaseLifetimeSec=
 [DHCPv6]
+UseAddress=
 UseNTP=
 UseDNS=
 RapidCommit=
@@ -142,6 +143,7 @@ RouteMetric=
 SubnetId=
 Announce=
 Assign=
+ManageTemporaryAddress=
 Token=
 [Route]
 Destination=
@@ -163,6 +165,7 @@ Source=
 Metric=
 TTLPropagate=
 MultiPathRoute=
+TCPAdvertisedMaximumSegmentSize=
 [Network]
 IPv6DuplicateAddressDetection=
 IPMasquerade=
@@ -246,6 +249,7 @@ FDMode=
 FDNonISO=
 RestartSec=
 TripleSampling=
+BusErrorReporting=
 Termination=
 ListenOnly=
 [Address]

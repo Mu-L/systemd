@@ -562,7 +562,7 @@ static bool can_inherit_stderr_from_stdout(
         if (e == EXEC_OUTPUT_NAMED_FD)
                 return streq_ptr(context->stdio_fdname[STDOUT_FILENO], context->stdio_fdname[STDERR_FILENO]);
 
-        if (IN_SET(e, EXEC_OUTPUT_FILE, EXEC_OUTPUT_FILE_APPEND))
+        if (IN_SET(e, EXEC_OUTPUT_FILE, EXEC_OUTPUT_FILE_APPEND, EXEC_OUTPUT_FILE_TRUNCATE))
                 return streq_ptr(context->stdio_file[STDOUT_FILENO], context->stdio_file[STDERR_FILENO]);
 
         return true;
@@ -698,7 +698,8 @@ static int setup_output(
                 return dup2(named_iofds[fileno], fileno) < 0 ? -errno : fileno;
 
         case EXEC_OUTPUT_FILE:
-        case EXEC_OUTPUT_FILE_APPEND: {
+        case EXEC_OUTPUT_FILE_APPEND:
+        case EXEC_OUTPUT_FILE_TRUNCATE: {
                 bool rw;
                 int fd, flags;
 
@@ -713,6 +714,8 @@ static int setup_output(
                 flags = O_WRONLY;
                 if (o == EXEC_OUTPUT_FILE_APPEND)
                         flags |= O_APPEND;
+                else if (o == EXEC_OUTPUT_FILE_TRUNCATE)
+                        flags |= O_TRUNC;
 
                 fd = acquire_path(context->stdio_file[fileno], flags, 0666 & ~context->umask);
                 if (fd < 0)
@@ -1984,13 +1987,12 @@ static int build_pass_environment(const ExecContext *c, char ***ret) {
         return 0;
 }
 
-static bool exec_needs_mount_namespace(
+bool exec_needs_mount_namespace(
                 const ExecContext *context,
                 const ExecParameters *params,
                 const ExecRuntime *runtime) {
 
         assert(context);
-        assert(params);
 
         if (context->root_image)
                 return true;
@@ -2032,7 +2034,7 @@ static bool exec_needs_mount_namespace(
                         return true;
 
                 for (ExecDirectoryType t = 0; t < _EXEC_DIRECTORY_TYPE_MAX; t++) {
-                        if (!params->prefix[t])
+                        if (params && !params->prefix[t])
                                 continue;
 
                         if (!strv_isempty(context->directories[t].paths))
@@ -3112,7 +3114,7 @@ static int apply_mount_namespace(
         _cleanup_strv_free_ char **empty_directories = NULL;
         const char *tmp_dir = NULL, *var_tmp_dir = NULL;
         const char *root_dir = NULL, *root_image = NULL;
-        _cleanup_free_ char *creds_path = NULL;
+        _cleanup_free_ char *creds_path = NULL, *incoming_dir = NULL, *propagate_dir = NULL;
         NamespaceInfo ns_info;
         bool needs_sandboxing;
         BindMount *bind_mounts = NULL;
@@ -3181,12 +3183,23 @@ static int apply_mount_namespace(
         if (context->mount_flags == MS_SHARED)
                 log_unit_debug(u, "shared mount propagation hidden by other fs namespacing unit settings: ignoring");
 
-        if (exec_context_has_credentials(context) && params->prefix[EXEC_DIRECTORY_RUNTIME]) {
+        if (exec_context_has_credentials(context) &&
+            params->prefix[EXEC_DIRECTORY_RUNTIME] &&
+            FLAGS_SET(params->flags, EXEC_WRITE_CREDENTIALS)) {
                 creds_path = path_join(params->prefix[EXEC_DIRECTORY_RUNTIME], "credentials", u->id);
                 if (!creds_path) {
                         r = -ENOMEM;
                         goto finalize;
                 }
+        }
+
+        if (MANAGER_IS_SYSTEM(u->manager)) {
+                propagate_dir = path_join("/run/systemd/propagate/", u->id);
+                if (!propagate_dir)
+                        return -ENOMEM;
+                incoming_dir = strdup("/run/systemd/incoming");
+                if (!incoming_dir)
+                        return -ENOMEM;
         }
 
         r = setup_namespace(root_dir, root_image, context->root_image_options,
@@ -3208,6 +3221,9 @@ static int apply_mount_namespace(
                             context->root_hash, context->root_hash_size, context->root_hash_path,
                             context->root_hash_sig, context->root_hash_sig_size, context->root_hash_sig_path,
                             context->root_verity,
+                            propagate_dir,
+                            incoming_dir,
+                            root_dir || root_image ? params->notify_socket : NULL,
                             DISSECT_IMAGE_DISCARD_ON_LOOP|DISSECT_IMAGE_RELAX_VAR_CHECK|DISSECT_IMAGE_FSCK,
                             error_path);
 
@@ -5357,10 +5373,14 @@ void exec_context_dump(const ExecContext *c, FILE* f, const char *prefix) {
                 fprintf(f, "%sStandardOutputFile: %s\n", prefix, c->stdio_file[STDOUT_FILENO]);
         if (c->std_output == EXEC_OUTPUT_FILE_APPEND)
                 fprintf(f, "%sStandardOutputFileToAppend: %s\n", prefix, c->stdio_file[STDOUT_FILENO]);
+        if (c->std_output == EXEC_OUTPUT_FILE_TRUNCATE)
+                fprintf(f, "%sStandardOutputFileToTruncate: %s\n", prefix, c->stdio_file[STDOUT_FILENO]);
         if (c->std_error == EXEC_OUTPUT_FILE)
                 fprintf(f, "%sStandardErrorFile: %s\n", prefix, c->stdio_file[STDERR_FILENO]);
         if (c->std_error == EXEC_OUTPUT_FILE_APPEND)
                 fprintf(f, "%sStandardErrorFileToAppend: %s\n", prefix, c->stdio_file[STDERR_FILENO]);
+        if (c->std_error == EXEC_OUTPUT_FILE_TRUNCATE)
+                fprintf(f, "%sStandardErrorFileToTruncate: %s\n", prefix, c->stdio_file[STDERR_FILENO]);
 
         if (c->tty_path)
                 fprintf(f,
@@ -6052,15 +6072,11 @@ static int exec_runtime_add(
 
         /* tmp_dir, var_tmp_dir, netns_storage_socket fds are donated on success */
 
-        r = hashmap_ensure_allocated(&m->exec_runtime_by_id, &string_hash_ops);
-        if (r < 0)
-                return r;
-
         r = exec_runtime_allocate(&rt, id);
         if (r < 0)
                 return r;
 
-        r = hashmap_put(m->exec_runtime_by_id, rt->id, rt);
+        r = hashmap_ensure_put(&m->exec_runtime_by_id, &string_hash_ops, rt->id, rt);
         if (r < 0)
                 return r;
 
@@ -6449,6 +6465,7 @@ static const char* const exec_output_table[_EXEC_OUTPUT_MAX] = {
         [EXEC_OUTPUT_NAMED_FD] = "fd",
         [EXEC_OUTPUT_FILE] = "file",
         [EXEC_OUTPUT_FILE_APPEND] = "append",
+        [EXEC_OUTPUT_FILE_TRUNCATE] = "truncate",
 };
 
 DEFINE_STRING_TABLE_LOOKUP(exec_output, ExecOutput);

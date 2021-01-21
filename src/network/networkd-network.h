@@ -146,6 +146,7 @@ struct Network {
         OrderedHashmap *dhcp_client_send_vendor_options;
 
         /* DHCPv6 Client support*/
+        bool dhcp6_use_address;
         bool dhcp6_use_dns;
         bool dhcp6_use_dns_set;
         bool dhcp6_use_ntp;
@@ -199,6 +200,7 @@ struct Network {
         int dhcp6_pd;
         bool dhcp6_pd_announce;
         bool dhcp6_pd_assign;
+        bool dhcp6_pd_manage_temporary_address;
         int64_t dhcp6_pd_subnet_id;
         union in_addr_union dhcp6_pd_token;
 
@@ -231,6 +233,7 @@ struct Network {
         unsigned can_data_sample_point;
         usec_t can_restart_us;
         int can_triple_sampling;
+        int can_berr_reporting;
         int can_termination;
         int can_listen_only;
         int can_fd_mode;

@@ -1202,6 +1202,20 @@ int config_parse_exec_output(
                         return 0;
 
                 eo = EXEC_OUTPUT_FILE_APPEND;
+
+        } else if ((n = startswith(rvalue, "truncate:"))) {
+
+                r = unit_full_printf(u, n, &resolved);
+                if (r < 0) {
+                        log_syntax(unit, LOG_WARNING, filename, line, r, "Failed to resolve unit specifiers in %s, ignoring: %m", n);
+                        return 0;
+                }
+
+                r = path_simplify_and_warn(resolved, PATH_CHECK_ABSOLUTE | PATH_CHECK_FATAL, unit, filename, line, lvalue);
+                if (r < 0)
+                        return 0;
+
+                eo = EXEC_OUTPUT_FILE_TRUNCATE;
         } else {
                 eo = exec_output_from_string(rvalue);
                 if (eo < 0) {
@@ -1668,16 +1682,17 @@ int config_parse_exec_root_hash_sig(
         return 0;
 }
 
-int config_parse_exec_cpu_affinity(const char *unit,
-                                   const char *filename,
-                                   unsigned line,
-                                   const char *section,
-                                   unsigned section_line,
-                                   const char *lvalue,
-                                   int ltype,
-                                   const char *rvalue,
-                                   void *data,
-                                   void *userdata) {
+int config_parse_exec_cpu_affinity(
+                const char *unit,
+                const char *filename,
+                unsigned line,
+                const char *section,
+                unsigned section_line,
+                const char *lvalue,
+                int ltype,
+                const char *rvalue,
+                void *data,
+                void *userdata) {
 
         ExecContext *c = data;
         int r;
@@ -1698,7 +1713,7 @@ int config_parse_exec_cpu_affinity(const char *unit,
         if (r >= 0)
                 c->cpu_affinity_from_numa = false;
 
-        return r;
+        return 0;
 }
 
 int config_parse_capability_set(
@@ -2728,7 +2743,7 @@ int config_parse_pass_environ(
         if (n) {
                 r = strv_extend_strv(passenv, n, true);
                 if (r < 0)
-                        return r;
+                        return log_oom();
         }
 
         return 0;
@@ -2803,7 +2818,7 @@ int config_parse_unset_environ(
         if (n) {
                 r = strv_extend_strv(unsetenv, n, true);
                 if (r < 0)
-                        return r;
+                        return log_oom();
         }
 
         return 0;
@@ -3081,16 +3096,17 @@ int config_parse_unit_requires_mounts_for(
         }
 }
 
-int config_parse_documentation(const char *unit,
-                               const char *filename,
-                               unsigned line,
-                               const char *section,
-                               unsigned section_line,
-                               const char *lvalue,
-                               int ltype,
-                               const char *rvalue,
-                               void *data,
-                               void *userdata) {
+int config_parse_documentation(
+                const char *unit,
+                const char *filename,
+                unsigned line,
+                const char *section,
+                unsigned section_line,
+                const char *lvalue,
+                int ltype,
+                const char *rvalue,
+                void *data,
+                void *userdata) {
 
         Unit *u = userdata;
         int r;
@@ -3124,7 +3140,7 @@ int config_parse_documentation(const char *unit,
         if (b)
                 *b = NULL;
 
-        return r;
+        return 0;
 }
 
 #if HAVE_SECCOMP
@@ -4522,13 +4538,14 @@ int config_parse_set_credential(
                 sc->data = TAKE_PTR(unescaped);
                 sc->size = l;
 
-                r = hashmap_ensure_allocated(&context->set_credentials, &exec_set_credential_hash_ops);
-                if (r < 0)
-                        return r;
-
-                r = hashmap_put(context->set_credentials, sc->id, sc);
-                if (r < 0)
+                r = hashmap_ensure_put(&context->set_credentials, &exec_set_credential_hash_ops, sc->id, sc);
+                if (r == -ENOMEM)
                         return log_oom();
+                if (r < 0) {
+                        log_syntax(unit, LOG_WARNING, filename, line, l,
+                                   "Duplicated credential value '%s', ignoring assignment: %s", sc->id, rvalue);
+                        return 0;
+                }
 
                 TAKE_PTR(sc);
         }
@@ -5761,8 +5778,8 @@ int config_parse_output_restricted(
                         return 0;
                 }
 
-                if (IN_SET(t, EXEC_OUTPUT_SOCKET, EXEC_OUTPUT_NAMED_FD, EXEC_OUTPUT_FILE, EXEC_OUTPUT_FILE_APPEND)) {
-                        log_syntax(unit, LOG_WARNING, filename, line, 0, "Standard output types socket, fd:, file:, append: are not supported as defaults, ignoring: %s", rvalue);
+                if (IN_SET(t, EXEC_OUTPUT_SOCKET, EXEC_OUTPUT_NAMED_FD, EXEC_OUTPUT_FILE, EXEC_OUTPUT_FILE_APPEND, EXEC_OUTPUT_FILE_TRUNCATE)) {
+                        log_syntax(unit, LOG_WARNING, filename, line, 0, "Standard output types socket, fd:, file:, append:, truncate: are not supported as defaults, ignoring: %s", rvalue);
                         return 0;
                 }
         }

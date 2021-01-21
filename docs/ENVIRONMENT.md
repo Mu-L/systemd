@@ -49,12 +49,19 @@ All tools:
 * `$SYSTEMD_CRYPTTAB` — if set, use this path instead of /etc/crypttab. Only
   useful for debugging. Currently only supported by systemd-cryptsetup-generator.
 
+* `$SYSTEMD_VERITYTAB` — if set, use this path instead of /etc/veritytab. Only
+  useful for debugging. Currently only supported by systemd-veritysetup-generator.
+
 * `$SYSTEMD_EFI_OPTIONS` — if set, used instead of the string in the
   SystemdOptions EFI variable. Analogous to `$SYSTEMD_PROC_CMDLINE`.
 
-* `$SYSTEMD_IN_INITRD` — takes a boolean. If set, overrides initrd detection.
-  This is useful for debugging and testing initrd-only programs in the main
-  system.
+* `$SYSTEMD_IN_INITRD=[auto|lenient|0|1]` — if set, specifies initrd detection
+  method. Defaults to `auto`. Behavior is defined as follows:
+  `auto`: Checks if `/etc/initrd-release` exists, and a temporary fs is mounted
+          on `/`. If both conditions meet, then it's in initrd.
+  `lenient`: Similar to `auto`, but the rootfs check is skipped.
+  `0|1`: Simply overrides initrd detection. This is useful for debugging and
+         testing initrd-only programs in the main system.
 
 * `$SYSTEMD_BUS_TIMEOUT=SECS` — specifies the maximum time to wait for method call
   completion. If no time unit is specified, assumes seconds. The usual other units
@@ -260,3 +267,15 @@ systemd-firstboot and localectl:
 * `SYSTEMD_LIST_NON_UTF8_LOCALES=1` – if set non-UTF-8 locales are listed among
   the installed ones. By default non-UTF-8 locales are suppressed from the
   selection, since we are living in the 21st century.
+
+systemd-sysext:
+
+* `SYSTEMD_SYSEXT_HIERARCHIES` – if set to a colon-separated list of absolute
+  paths this variable may be used to override which hierarchies to manage with
+  `systemd-sysext`. By default only `/usr/` and `/opt/` are managed. With this
+  environment variable this list may be changed, in order to add or remove
+  directories from this list. This should only reference "real" file systems
+  and directories that only contain "real" file systems as submounts — do not
+  specify API file systems such as `/proc/` or `/sys/` here, or hierarchies
+  that have them as submounts. In particular, do not specify the root directory
+  `/` here.

@@ -33,6 +33,10 @@ static inline bool streq_ptr(const char *a, const char *b) {
         return strcmp_ptr(a, b) == 0;
 }
 
+static inline bool strcaseeq_ptr(const char *a, const char *b) {
+        return strcasecmp_ptr(a, b) == 0;
+}
+
 static inline char* strstr_ptr(const char *haystack, const char *needle) {
         if (!haystack || !needle)
                 return NULL;
@@ -189,9 +193,10 @@ char *strreplace(const char *text, const char *old_string, const char *new_strin
 
 char *strip_tab_ansi(char **ibuf, size_t *_isz, size_t highlight[2]);
 
-char *strextend_with_separator(char **x, const char *separator, ...) _sentinel_;
+char *strextend_with_separator_internal(char **x, const char *separator, ...) _sentinel_;
 
-#define strextend(x, ...) strextend_with_separator(x, NULL, __VA_ARGS__)
+#define strextend_with_separator(x, separator, ...) strextend_with_separator_internal(x, separator, __VA_ARGS__, NULL)
+#define strextend(x, ...) strextend_with_separator_internal(x, NULL, __VA_ARGS__, NULL)
 
 char *strrep(const char *s, unsigned n);
 

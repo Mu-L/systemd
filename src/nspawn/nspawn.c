@@ -2940,7 +2940,7 @@ static int determine_names(void) {
                 if (arg_machine) {
                         _cleanup_(image_unrefp) Image *i = NULL;
 
-                        r = image_find(IMAGE_MACHINE, arg_machine, &i);
+                        r = image_find(IMAGE_MACHINE, arg_machine, NULL, &i);
                         if (r == -ENOENT)
                                 return log_error_errno(r, "No image for machine '%s'.", arg_machine);
                         if (r < 0)
@@ -3995,6 +3995,10 @@ static int nspawn_dispatch_notify_fd(sd_event_source *source, int fd, uint32_t r
         n = recvmsg_safe(fd, &msghdr, MSG_DONTWAIT|MSG_CMSG_CLOEXEC);
         if (IN_SET(n, -EAGAIN, -EINTR))
                 return 0;
+        if (n == -EXFULL) {
+                log_warning("Got message with truncated control data (too many fds sent?), ignoring.");
+                return 0;
+        }
         if (n < 0)
                 return log_warning_errno(n, "Couldn't read notification socket: %m");
 

@@ -105,10 +105,13 @@ static const NLTypeSystem rtnl_macvlan_macaddr_type_system = {
 };
 
 static const NLType rtnl_link_info_data_macvlan_types[] = {
-        [IFLA_MACVLAN_MODE]  = { .type = NETLINK_TYPE_U32 },
-        [IFLA_MACVLAN_FLAGS] = { .type = NETLINK_TYPE_U16 },
-        [IFLA_MACVLAN_MACADDR_MODE] = { .type = NETLINK_TYPE_U32 },
-        [IFLA_MACVLAN_MACADDR_DATA] = { .type = NETLINK_TYPE_NESTED, .type_system = &rtnl_macvlan_macaddr_type_system },
+        [IFLA_MACVLAN_MODE]              = { .type = NETLINK_TYPE_U32 },
+        [IFLA_MACVLAN_FLAGS]             = { .type = NETLINK_TYPE_U16 },
+        [IFLA_MACVLAN_MACADDR_MODE]      = { .type = NETLINK_TYPE_U32 },
+        [IFLA_MACVLAN_MACADDR_DATA]      = { .type = NETLINK_TYPE_NESTED, .type_system = &rtnl_macvlan_macaddr_type_system },
+        [IFLA_MACVLAN_MACADDR_COUNT]     = { .type = NETLINK_TYPE_U32 },
+        [IFLA_MACVLAN_BC_QUEUE_LEN]      = { .type = NETLINK_TYPE_U32 },
+        [IFLA_MACVLAN_BC_QUEUE_LEN_USED] = { .type = NETLINK_TYPE_REJECT },
 };
 
 static const NLType rtnl_link_info_data_bridge_types[] = {
@@ -152,13 +155,20 @@ static const NLType rtnl_link_info_data_bridge_types[] = {
         [IFLA_BR_MCAST_IGMP_VERSION]         = { .type = NETLINK_TYPE_U8 },
 };
 
+static const NLType rtnl_vlan_qos_map_types[] = {
+        [IFLA_VLAN_QOS_MAPPING]        = { .size = sizeof(struct ifla_vlan_qos_mapping) },
+};
+
+static const NLTypeSystem rtnl_vlan_qos_map_type_system = {
+        .count = ELEMENTSOF(rtnl_vlan_qos_map_types),
+        .types = rtnl_vlan_qos_map_types,
+};
+
 static const NLType rtnl_link_info_data_vlan_types[] = {
         [IFLA_VLAN_ID]          = { .type = NETLINK_TYPE_U16 },
-/*
-        [IFLA_VLAN_FLAGS]       = { .len = sizeof(struct ifla_vlan_flags) },
-        [IFLA_VLAN_EGRESS_QOS]  = { .type = NETLINK_TYPE_NESTED },
-        [IFLA_VLAN_INGRESS_QOS] = { .type = NETLINK_TYPE_NESTED },
-*/
+        [IFLA_VLAN_FLAGS]       = { .size = sizeof(struct ifla_vlan_flags) },
+        [IFLA_VLAN_EGRESS_QOS]  = { .type = NETLINK_TYPE_NESTED, .type_system = &rtnl_vlan_qos_map_type_system },
+        [IFLA_VLAN_INGRESS_QOS] = { .type = NETLINK_TYPE_NESTED, .type_system = &rtnl_vlan_qos_map_type_system },
         [IFLA_VLAN_PROTOCOL]    = { .type = NETLINK_TYPE_U16 },
 };
 
@@ -642,6 +652,8 @@ static const NLType rtnl_link_types[] = {
         [IFLA_PROMISCUITY]      = { .type = NETLINK_TYPE_U32 },
         [IFLA_NUM_TX_QUEUES]    = { .type = NETLINK_TYPE_U32 },
         [IFLA_NUM_RX_QUEUES]    = { .type = NETLINK_TYPE_U32 },
+        [IFLA_GSO_MAX_SEGS]     = { .type = NETLINK_TYPE_U32 },
+        [IFLA_GSO_MAX_SIZE]     = { .type = NETLINK_TYPE_U32 },
         [IFLA_CARRIER]          = { .type = NETLINK_TYPE_U8 },
 /*
         [IFLA_PHYS_PORT_ID]     = { .type = NETLINK_TYPE_BINARY, .len = MAX_PHYS_PORT_ID_LEN },

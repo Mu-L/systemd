@@ -38,6 +38,7 @@
 #include "systemctl-list-units.h"
 #include "systemctl-log-setting.h"
 #include "systemctl-logind.h"
+#include "systemctl-mount.h"
 #include "systemctl-preset-all.h"
 #include "systemctl-reset-failed.h"
 #include "systemctl-service-watchdogs.h"
@@ -74,7 +75,7 @@ bool arg_no_wall = false;
 bool arg_no_reload = false;
 bool arg_value = false;
 bool arg_show_types = false;
-bool arg_ignore_inhibitors = false;
+int arg_check_inhibitors = -1;
 bool arg_dry_run = false;
 bool arg_quiet = false;
 bool arg_full = false;
@@ -105,6 +106,8 @@ bool arg_jobs_before = false;
 bool arg_jobs_after = false;
 char **arg_clean_what = NULL;
 TimestampStyle arg_timestamp_style = TIMESTAMP_PRETTY;
+bool arg_read_only = false;
+bool arg_mkdir = false;
 
 STATIC_DESTRUCTOR_REGISTER(arg_wall, strv_freep);
 STATIC_DESTRUCTOR_REGISTER(arg_root, freep);
@@ -157,6 +160,8 @@ static int systemctl_help(void) {
                "  freeze PATTERN...                   Freeze execution of unit processes\n"
                "  thaw PATTERN...                     Resume execution of a frozen unit\n"
                "  set-property UNIT PROPERTY=VALUE... Sets one or more properties of a unit\n"
+               "  bind UNIT PATH [PATH]               Bind-mount a path from the host into a\n"
+               "                                      unit's namespace\n"
                "  service-log-level SERVICE [LEVEL]   Get/set logging threshold for service\n"
                "  service-log-target SERVICE [TARGET] Get/set logging target for service\n"
                "  reset-failed [PATTERN...]           Reset failed state for all, one, or more\n"
@@ -193,7 +198,7 @@ static int systemctl_help(void) {
                "  show-environment                    Dump environment\n"
                "  set-environment VARIABLE=VALUE...   Set one or more environment variables\n"
                "  unset-environment VARIABLE...       Unset one or more environment variables\n"
-               "  import-environment [VARIABLE...]    Import all or some environment variables\n"
+               "  import-environment VARIABLE...      Import all or some environment variables\n"
                "\n%3$sManager State Commands:%4$s\n"
                "  daemon-reload                       Reload systemd manager configuration\n"
                "  daemon-reexec                       Reexecute systemd manager\n"
@@ -241,7 +246,10 @@ static int systemctl_help(void) {
                "  -T --show-transaction  When enqueuing a unit job, show full transaction\n"
                "     --show-types        When showing sockets, explicitly show their type\n"
                "     --value             When showing properties, only print the value\n"
-               "  -i --ignore-inhibitors When shutting down or sleeping, ignore inhibitors\n"
+               "     --check-inhibitors=MODE\n"
+               "                         Specify if checking inhibitors before shutting down,\n"
+               "                         sleeping or hibernating\n"
+               "  -i                     Shortcut for --check-inhibitors=no\n"
                "     --kill-who=WHO      Whom to send signal to\n"
                "  -s --signal=SIGNAL     Which signal to send\n"
                "     --what=RESOURCES    Which types of resources to remove\n"
@@ -283,6 +291,8 @@ static int systemctl_help(void) {
                "                         'us': 'Day YYYY-MM-DD HH:MM:SS.UUUUUU TZ\n"
                "                         'utc': 'Day YYYY-MM-DD HH:MM:SS UTC\n"
                "                         'us+utc': 'Day YYYY-MM-DD HH:MM:SS.UUUUUU UTC\n"
+               "     --read-only         Create read-only bind mount\n"
+               "     --mkdir             Create directory before bind-mounting, if missing\n"
                "\nSee the %2$s for details.\n"
                , program_invocation_short_name
                , link
@@ -364,6 +374,7 @@ static int systemctl_parse_argv(int argc, char *argv[]) {
                 ARG_REVERSE,
                 ARG_AFTER,
                 ARG_BEFORE,
+                ARG_CHECK_INHIBITORS,
                 ARG_DRY_RUN,
                 ARG_SHOW_TYPES,
                 ARG_IRREVERSIBLE,
@@ -397,6 +408,8 @@ static int systemctl_parse_argv(int argc, char *argv[]) {
                 ARG_WHAT,
                 ARG_REBOOT_ARG,
                 ARG_TIMESTAMP_STYLE,
+                ARG_READ_ONLY,
+                ARG_MKDIR,
         };
 
         static const struct option options[] = {
@@ -415,7 +428,8 @@ static int systemctl_parse_argv(int argc, char *argv[]) {
                 { "fail",                no_argument,       NULL, ARG_FAIL                }, /* compatibility only */
                 { "irreversible",        no_argument,       NULL, ARG_IRREVERSIBLE        }, /* compatibility only */
                 { "ignore-dependencies", no_argument,       NULL, ARG_IGNORE_DEPENDENCIES }, /* compatibility only */
-                { "ignore-inhibitors",   no_argument,       NULL, 'i'                     },
+                { "ignore-inhibitors",   no_argument,       NULL, 'i'                     }, /* compatibility only */
+                { "check-inhibitors",    required_argument, NULL, ARG_CHECK_INHIBITORS    },
                 { "value",               no_argument,       NULL, ARG_VALUE               },
                 { "user",                no_argument,       NULL, ARG_USER                },
                 { "system",              no_argument,       NULL, ARG_SYSTEM              },
@@ -452,6 +466,8 @@ static int systemctl_parse_argv(int argc, char *argv[]) {
                 { "what",                required_argument, NULL, ARG_WHAT                },
                 { "reboot-argument",     required_argument, NULL, ARG_REBOOT_ARG          },
                 { "timestamp",           required_argument, NULL, ARG_TIMESTAMP_STYLE     },
+                { "read-only",           no_argument,       NULL, ARG_READ_ONLY           },
+                { "mkdir",               no_argument,       NULL, ARG_MKDIR               },
                 {}
         };
 
@@ -716,7 +732,18 @@ static int systemctl_parse_argv(int argc, char *argv[]) {
                         break;
 
                 case 'i':
-                        arg_ignore_inhibitors = true;
+                        arg_check_inhibitors = 0;
+                        break;
+
+                case ARG_CHECK_INHIBITORS:
+                        if (streq(optarg, "auto"))
+                                arg_check_inhibitors = -1;
+                        else {
+                                r = parse_boolean(optarg);
+                                if (r < 0)
+                                        return log_error_errno(r, "Failed to parse --check-inhibitors= argument: %s", optarg);
+                                arg_check_inhibitors = r;
+                        }
                         break;
 
                 case ARG_PLAIN:
@@ -860,6 +887,14 @@ static int systemctl_parse_argv(int argc, char *argv[]) {
                                 return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
                                                        "Invalid value: %s.", optarg);
 
+                        break;
+
+                case ARG_READ_ONLY:
+                        arg_read_only = true;
+                        break;
+
+                case ARG_MKDIR:
+                        arg_mkdir = true;
                         break;
 
                 case '.':
@@ -1029,6 +1064,7 @@ static int systemctl_main(int argc, char *argv[]) {
                 { "add-wants",             3,        VERB_ANY, 0,                add_dependency          },
                 { "add-requires",          3,        VERB_ANY, 0,                add_dependency          },
                 { "edit",                  2,        VERB_ANY, VERB_ONLINE_ONLY, edit                    },
+                { "bind",                  3,        4,        VERB_ONLINE_ONLY, mount_bind              },
                 {}
         };
 

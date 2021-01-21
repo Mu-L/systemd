@@ -20,7 +20,49 @@ Janitorial Clean-ups:
 
 Features:
 
+* sd-boot: define a drop-in dir in the ESP that may contain X.509
+  certificates. If the firmware is detected to be in setup mode, automatically
+  enroll them as PK/KEK/db, turn off setup mode and proceed. Optionally,
+  instead of auto-enrolling them add them to the sd-boot menu, giving the user
+  the option to manually enroll them, after selecting the menu entry. This way,
+  installer images can just drop the certfiicates in the ESP, and on first boot
+  can easily enroll the keys without ever booting up.
+
+* efi stub: optionally, load initrd from disk as a separate file, HMAC check it
+  with key from TPM, bound to PCR, refusing if failing. This would then allow
+  traditional distros that generate initrds locally to secure them with TPM:
+  after generating the initrd, do the HMAC calculation, put result in initrd
+  filename, done. This would then bind the validity of the initrd to the local
+  host, and used kernel, and means people cannot change initrd or kernel
+  without booting the kernel + initrd.
+
+* importd: add ability download images for portabled + sysext
+
+* importd: support image signature verification with PKCS#7 + OpenBSD signify
+  logic, as alternative to crummy gpg
+
+* sd-boot: add service that automatically runs "bootctl update" on every boot,
+  in a graceful way, so that updated /usr trees automatically propagate into
+  updated boot loaders on reboot.
+
+* sysext: optionally, if the merged trees allow it use bind mounts instead of
+  overlayfs
+
+* nspawn: add support for sysext extensions, too. i.e. a new --extension=
+  switch that takes one or more arguments, and applies the extensions already
+  during startup.
+
+* add "systemd-analyze debug" + AttachDebugger= in unit files: The former
+  specifies a command to execute; the latter specifies that an already running
+  "systemd-analyze debug" instance shall be contacted and execution paused
+  until it gives an OK. That way, tools like gdb or strace can be safely be
+  invoked on processes forked off PID 1.
+
 * expose MS_NOSYMFOLLOW in various places
+
+* tpm2: support a PIN policy, i.e. allowing windows-style short authentication
+  passwords by using the TPM2 to enforce ratelimiting and such, use for
+  cryptsetup and homed
 
 * Add concept for upgrading TPM2 enrollments, maybe a new switch
   --pcrs=4:<hash> or so, i.e. select a PCR to include in the hash, and then
@@ -129,10 +171,6 @@ Features:
 * journald: do journal file writing out-of-process, with one writer process per
   client UID, so that synthetic hash table collisions can slow down a specific
   user's journal stream down but not the others.
-
-* add "throttling" to sd-event event sources: optionally, when we wake up too
-  often for one, let's turn it off entirely for a while. Use that for the
-  /proc/self/mountinfo logic.
 
 * nspawn: support time namespaces
 
@@ -808,9 +846,6 @@ Features:
   picked up by systemd unless they contain a medium. This would mirror
   the behaviour we already have for CD drives.
 
-* networkd/udev: implement SR_IOV configuration in .link files:
-  http://lists.freedesktop.org/archives/systemd-devel/2015-January/027451.html
-
 * hostnamectl: show root image uuid
 
 * Find a solution for SMACK capabilities stuff:
@@ -1319,7 +1354,6 @@ Features:
      for all routes to it. possibly a second default for DHCP routes.
    - allow Name= to be specified repeatedly in the [Match] section. Maybe also
      support Name=foo*|bar*|baz ?
-   - duplicate address check for static IPs (like ARPCHECK in network-scripts)
    - whenever uplink info changes, make DHCP server send out FORCERENEW
 
 * Figure out how to do unittests of networkd's state serialization

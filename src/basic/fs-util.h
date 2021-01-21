@@ -43,7 +43,8 @@ int futimens_opath(int fd, const struct timespec ts[2]);
 int fd_warn_permissions(const char *path, int fd);
 int stat_warn_permissions(const char *path, const struct stat *st);
 
-#define laccess(path, mode) faccessat(AT_FDCWD, (path), (mode), AT_SYMLINK_NOFOLLOW)
+#define laccess(path, mode)                                             \
+        (faccessat(AT_FDCWD, (path), (mode), AT_SYMLINK_NOFOLLOW) < 0 ? -errno : 0)
 
 int touch_file(const char *path, bool parents, usec_t stamp, uid_t uid, gid_t gid, mode_t mode);
 int touch(const char *path);
@@ -99,16 +100,25 @@ int chase_symlinks_and_opendir(const char *path, const char *root, unsigned chas
 int chase_symlinks_and_stat(const char *path, const char *root, unsigned chase_flags, char **ret_path, struct stat *ret_stat, int *ret_fd);
 
 /* Useful for usage with _cleanup_(), removes a directory and frees the pointer */
-static inline void rmdir_and_free(char *p) {
+static inline char *rmdir_and_free(char *p) {
         PROTECT_ERRNO;
+
+        if (!p)
+                return NULL;
+
         (void) rmdir(p);
         free(p);
+        return NULL;
 }
 DEFINE_TRIVIAL_CLEANUP_FUNC(char*, rmdir_and_free);
 
-static inline void unlink_and_free(char *p) {
+static inline char* unlink_and_free(char *p) {
+        if (!p)
+                return NULL;
+
         (void) unlink_noerrno(p);
         free(p);
+        return NULL;
 }
 DEFINE_TRIVIAL_CLEANUP_FUNC(char*, unlink_and_free);
 

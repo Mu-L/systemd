@@ -61,6 +61,7 @@ typedef enum ExecOutput {
         EXEC_OUTPUT_NAMED_FD,
         EXEC_OUTPUT_FILE,
         EXEC_OUTPUT_FILE_APPEND,
+        EXEC_OUTPUT_FILE_TRUNCATE,
         _EXEC_OUTPUT_MAX,
         _EXEC_OUTPUT_INVALID = -1
 } ExecOutput;
@@ -383,6 +384,8 @@ struct ExecParameters {
 
         /* An fd that is closed by the execve(), and thus will result in EOF when the execve() is done */
         int exec_fd;
+
+        const char *notify_socket;
 };
 
 #include "unit.h"
@@ -470,3 +473,5 @@ ExecDirectoryType exec_directory_type_from_string(const char *s) _pure_;
 
 const char* exec_resource_type_to_string(ExecDirectoryType i) _const_;
 ExecDirectoryType exec_resource_type_from_string(const char *s) _pure_;
+
+bool exec_needs_mount_namespace(const ExecContext *context, const ExecParameters *params, const ExecRuntime *runtime);

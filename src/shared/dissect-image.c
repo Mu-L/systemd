@@ -1340,12 +1340,12 @@ static int mount_partition(
                 if (asprintf(&uid_option, "uid=" UID_FMT ",gid=" GID_FMT, uid_shift, (gid_t) uid_shift) < 0)
                         return -ENOMEM;
 
-                if (!strextend_with_separator(&options, ",", uid_option, NULL))
+                if (!strextend_with_separator(&options, ",", uid_option))
                         return -ENOMEM;
         }
 
         if (!isempty(m->mount_options))
-                if (!strextend_with_separator(&options, ",", m->mount_options, NULL))
+                if (!strextend_with_separator(&options, ",", m->mount_options))
                         return -ENOMEM;
 
         if (FLAGS_SET(flags, DISSECT_IMAGE_MKDIR)) {
@@ -2123,7 +2123,7 @@ int verity_settings_load(
                 }
         }
 
-        if (verity->root_hash && !verity->root_hash_sig) {
+        if ((root_hash || verity->root_hash) && !verity->root_hash_sig) {
                 if (root_hash_sig_path) {
                         r = read_full_file(root_hash_sig_path, (char**) &root_hash_sig, &root_hash_sig_size);
                         if (r < 0 && r != -ENOENT)

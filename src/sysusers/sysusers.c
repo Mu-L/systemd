@@ -1043,13 +1043,15 @@ static int add_user(Item *i) {
                 i->uid = search_uid;
         }
 
-        r = ordered_hashmap_ensure_allocated(&todo_uids, NULL);
-        if (r < 0)
+        r = ordered_hashmap_ensure_put(&todo_uids, NULL, UID_TO_PTR(i->uid), i);
+        if (r == -EEXIST)
+                return log_error_errno(r, "Requested user %s with uid " UID_FMT " and gid" GID_FMT " to be created is duplicated "
+                                       "or conflicts with another user.", i->name, i->uid, i->gid);
+        if (r == -ENOMEM)
                 return log_oom();
-
-        r = ordered_hashmap_put(todo_uids, UID_TO_PTR(i->uid), i);
         if (r < 0)
-                return log_oom();
+                return log_error_errno(r, "Failed to store user %s with uid " UID_FMT " and gid " GID_FMT " to be created: %m",
+                                       i->name, i->uid, i->gid);
 
         i->todo_user = true;
         log_info("Creating user %s (%s) with uid " UID_FMT " and gid " GID_FMT ".", i->name, strna(i->description), i->uid, i->gid);
@@ -1212,13 +1214,13 @@ static int add_group(Item *i) {
                 i->gid = search_uid;
         }
 
-        r = ordered_hashmap_ensure_allocated(&todo_gids, NULL);
-        if (r < 0)
+        r = ordered_hashmap_ensure_put(&todo_gids, NULL, GID_TO_PTR(i->gid), i);
+        if (r == -EEXIST)
+                return log_error_errno(r, "Requested group %s with gid "GID_FMT " to be created is duplicated or conflicts with another user.", i->name, i->gid);
+        if (r == -ENOMEM)
                 return log_oom();
-
-        r = ordered_hashmap_put(todo_gids, GID_TO_PTR(i->gid), i);
         if (r < 0)
-                return log_oom();
+                return log_error_errno(r, "Failed to store group %s with gid " GID_FMT " to be created: %m", i->name, i->gid);
 
         i->todo_group = true;
         log_info("Creating group %s with gid " GID_FMT ".", i->name, i->gid);
@@ -1298,10 +1300,6 @@ static int add_implicit(void) {
                         if (!ordered_hashmap_get(users, *m)) {
                                 _cleanup_(item_freep) Item *j = NULL;
 
-                                r = ordered_hashmap_ensure_allocated(&users, &item_hash_ops);
-                                if (r < 0)
-                                        return log_oom();
-
                                 j = new0(Item, 1);
                                 if (!j)
                                         return log_oom();
@@ -1311,21 +1309,19 @@ static int add_implicit(void) {
                                 if (!j->name)
                                         return log_oom();
 
-                                r = ordered_hashmap_put(users, j->name, j);
-                                if (r < 0)
+                                r = ordered_hashmap_ensure_put(&users, &item_hash_ops, j->name, j);
+                                if (r == -ENOMEM)
                                         return log_oom();
+                                if (r < 0)
+                                        return log_error_errno(r, "Failed to add implicit user '%s': %m", j->name);
 
                                 log_debug("Adding implicit user '%s' due to m line", j->name);
-                                j = NULL;
+                                TAKE_PTR(j);
                         }
 
                 if (!(ordered_hashmap_get(users, g) ||
                       ordered_hashmap_get(groups, g))) {
                         _cleanup_(item_freep) Item *j = NULL;
-
-                        r = ordered_hashmap_ensure_allocated(&groups, &item_hash_ops);
-                        if (r < 0)
-                                return log_oom();
 
                         j = new0(Item, 1);
                         if (!j)
@@ -1336,12 +1332,14 @@ static int add_implicit(void) {
                         if (!j->name)
                                 return log_oom();
 
-                        r = ordered_hashmap_put(groups, j->name, j);
-                        if (r < 0)
+                        r = ordered_hashmap_ensure_put(&groups, &item_hash_ops, j->name, j);
+                        if (r == -ENOMEM)
                                 return log_oom();
+                        if (r < 0)
+                                return log_error_errno(r, "Failed to add implicit group '%s': %m", j->name);
 
                         log_debug("Adding implicit group '%s' due to m line", j->name);
-                        j = NULL;
+                        TAKE_PTR(j);
                 }
         }
 
